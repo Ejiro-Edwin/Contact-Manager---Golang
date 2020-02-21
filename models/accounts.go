@@ -6,6 +6,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -20,22 +21,24 @@ type Token struct {
 //a struct to rep user account
 type Account struct {
 	gorm.Model
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" validate:"required, email"`
+	Password string `json:"password" validate:"required"`
 	Token    string `json:"token";sql:"-"`
 }
 
+func validateEmail(email string) bool {
+	Re := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-z]{2,4}$`)
+	return Re.MatchString(email)
+}
 //Validate incoming user details...
 func (account *Account) Validate() (map[string]interface{}, bool) {
 
-	if !strings.Contains(account.Email, "@") {
-		return u.Message(false, "Email address is required"), false
-	}
-
 	if len(account.Password) < 6 {
-		return u.Message(false, "Password is required"), false
+		return u.Message(false, "Password must be greater than 6 characters"), false
 	}
-
+	if !validateEmail(account.Email) {
+		return u.Message(false, "Email address is invalid"), false
+	}
 	//Email must be unique
 	temp := &Account{}
 
@@ -59,7 +62,7 @@ func (account *Account) Create() (map[string]interface{}) {
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(account.Password), bcrypt.DefaultCost)
 	account.Password = string(hashedPassword)
-
+	account.Email = strings.ToLower(account.Email)
 	GetDB().Create(account)
 
 	if account.ID <= 0 {
@@ -73,6 +76,7 @@ func (account *Account) Create() (map[string]interface{}) {
 	account.Token = tokenString
 
 	account.Password = "" //delete password
+
 
 	response := u.Message(true, "Account has been created")
 	response["account"] = account
